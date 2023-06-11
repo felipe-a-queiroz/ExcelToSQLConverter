@@ -8,6 +8,14 @@ O Excel to SQL Converter é uma aplicação Java que varre um diretório por arq
 - Para cada arquivo XLSX encontrado, converte os dados em scripts SQL de inserção.
 - Salva os scripts SQL em outro diretório.
 - Gera instruções DELETE antes de cada instrução INSERT para a linha que está formatada com a cor verde.
+- Se uma linha tiver células pintadas em verde (RGB 0, 255, 0), mas nem todas as células daquela linha estiverem verdes, o DELETE é feito com todas as colunas, exceto a pintada de verde no "WHERE" e o INSERT contém todas as colunas, como se toda a linha estivesse verde.
+- Se uma linha estiver pintada na cor vermelha (RGB 255, 0, 0), apenas o comando de DELETE é criado para essa linha.
+
+## Imagens
+
+![Excel de entrada](images\ExcelToSQL1.png)
+
+![SQL formado](images\ExcelToSQL2.png)
 
 ## Requisitos
 
