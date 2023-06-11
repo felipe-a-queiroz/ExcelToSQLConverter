@@ -33,7 +33,6 @@ public class ExcelToSqlConverter {
 
         for (File file : files) {
             String fileName = FilenameUtils.removeExtension(file.getName());
-            System.out.println("Arquivo encontrado: " + fileName);
             String outputFilePath = outputDirectory + File.separator + fileName + ".sql";
 
             try (Workbook workbook = new XSSFWorkbook(file);
@@ -49,24 +48,19 @@ public class ExcelToSqlConverter {
                         Row columnNamesRow = rowIterator.next();
 
                         String tableName = getCellValue(tableNameRow.getCell(0));
-                        System.out.println("Tabela encontrada: " + tableName);
                         StringBuilder sqlBuilder = new StringBuilder();
 
                         while (rowIterator.hasNext()) {
                             Row dataRow = rowIterator.next();
-                            CellStyle cellStyle = dataRow.getCell(0).getCellStyle();
+                            boolean isGreenRow = isGreenRow(dataRow);
 
-                            Cell cell = dataRow.getCell(0);
-                            String cellValue = getCellValue(cell);
-                            System.out.println("Linha encontrada: " + cellValue);
-                            if (isGreen(cellStyle)) {
-                                System.out.println("É verde");
+                            if (isGreenRow) {
                                 String deleteSql = generateDeleteStatement(tableName, columnNamesRow, dataRow);
                                 String insertSql = generateInsertStatement(tableName, columnNamesRow, dataRow);
-                                sqlBuilder.append(deleteSql).append("\n");
-                                sqlBuilder.append("/").append("\n");
-                                sqlBuilder.append(insertSql).append("\n");
-                                sqlBuilder.append("/").append("\n");
+
+                                sqlBuilder.append(deleteSql).append("\n").append("/").append("\n");
+                                sqlBuilder.append(insertSql).append("\n").append("/").append("\n");
+
                             }
                         }
 
@@ -94,8 +88,56 @@ public class ExcelToSqlConverter {
     }
 
     private static String getCellValue(Cell cell) {
-        DataFormatter formatter = new DataFormatter();
-        return formatter.formatCellValue(cell);
+        if (cell == null) {
+            return "";
+        }
+
+        CellType cellType = cell.getCellType();
+
+        switch (cellType) {
+            case STRING:
+                return cell.getStringCellValue();
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getDateCellValue().toString();
+                } else {
+                    return String.valueOf(cell.getNumericCellValue());
+                }
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                return cell.getCellFormula();
+            default:
+                return "";
+        }
+    }
+
+    private static boolean isGreenRow(Row row) {
+        int lastCellNum = row.getLastCellNum();
+
+        for (int i = 0; i < lastCellNum; i++) {
+            Cell cell = row.getCell(i);
+
+            if (cell != null && isGreen(cell.getCellStyle())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static boolean isAllGreenRow(Row row) {
+        int lastCellNum = row.getLastCellNum();
+
+        for (int i = 0; i < lastCellNum; i++) {
+            Cell cell = row.getCell(i);
+
+            if (cell != null && !isGreen(cell.getCellStyle())) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static boolean isGreen(CellStyle cellStyle) {
@@ -108,51 +150,71 @@ public class ExcelToSqlConverter {
     }
 
     private static String generateDeleteStatement(String tableName, Row columnNamesRow, Row dataRow) {
+        int columnCount = columnNamesRow.getLastCellNum();
         StringBuilder deleteSql = new StringBuilder("DELETE FROM " + tableName + " WHERE ");
 
-        int columnCount = columnNamesRow.getLastCellNum();
+        boolean isAllGreen = isAllGreenRow(dataRow);
 
-        for (int i = 0; i < columnCount; i++) {
-            String columnName = getCellValue(columnNamesRow.getCell(i));
-            String columnValue = getCellValue(dataRow.getCell(i));
+        if (isAllGreen) {
+            for (int i = 0; i < columnCount; i++) {
+                String columnName = getCellValue(columnNamesRow.getCell(i));
+                String columnValue = getCellValue(dataRow.getCell(i));
 
-            deleteSql.append(columnName).append(" = '").append(columnValue).append("'");
+                deleteSql.append(columnName).append(" = '").append(columnValue).append("'");
 
-            if (i < columnCount - 1) {
-                deleteSql.append(" AND ");
+                if (i < columnCount - 1) {
+                    deleteSql.append(" AND ");
+                }
+            }
+        } else {
+            for (int i = 0; i < columnCount; i++) {
+                Cell cell = dataRow.getCell(i);
+
+                if (cell != null && !isGreen(cell.getCellStyle())) {
+                    String columnName = getCellValue(columnNamesRow.getCell(i));
+                    String columnValue = getCellValue(cell);
+
+                    deleteSql.append(columnName).append(" = '").append(columnValue).append("'");
+
+                    if (i < columnCount - 1) {
+                        deleteSql.append(" AND ");
+                    }
+                }
             }
         }
-        deleteSql.append(";");
+
         return deleteSql.toString();
     }
 
     private static String generateInsertStatement(String tableName, Row columnNamesRow, Row dataRow) {
-        StringBuilder insertBuilder = new StringBuilder();
-        insertBuilder.append("INSERT INTO ").append(tableName).append(" (");
-
         int columnCount = columnNamesRow.getLastCellNum();
+        StringBuilder insertSql = new StringBuilder("INSERT INTO " + tableName + " (");
+
         for (int i = 0; i < columnCount; i++) {
             String columnName = getCellValue(columnNamesRow.getCell(i));
-            insertBuilder.append(columnName);
+
+            insertSql.append(columnName);
 
             if (i < columnCount - 1) {
-                insertBuilder.append(", ");
+                insertSql.append(", ");
             }
         }
 
-        insertBuilder.append(") VALUES (");
+        insertSql.append(") VALUES (");
 
         for (int i = 0; i < columnCount; i++) {
-            Cell cell = dataRow.getCell(i);
-            String cellValue = getCellValue(cell);
-            insertBuilder.append("'").append(cellValue).append("'");
+            String columnValue = getCellValue(dataRow.getCell(i));
+
+            insertSql.append("'").append(columnValue).append("'");
 
             if (i < columnCount - 1) {
-                insertBuilder.append(", ");
+                insertSql.append(", ");
             }
         }
 
-        insertBuilder.append(");");
-        return insertBuilder.toString();
+        insertSql.append(")");
+
+        return insertSql.toString();
     }
+
 }
