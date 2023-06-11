@@ -13,9 +13,9 @@ O Excel to SQL Converter é uma aplicação Java que varre um diretório por arq
 
 ## Imagens
 
-![Excel de entrada](images\ExcelToSQL1.png)
+![Excel de entrada](images/ExcelToSQL1.png)
 
-![SQL formado](images\ExcelToSQL2.png)
+![SQL formado](images/ExcelToSQL2.png)
 
 ## Requisitos
 
