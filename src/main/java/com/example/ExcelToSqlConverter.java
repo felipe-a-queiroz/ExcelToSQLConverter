@@ -18,7 +18,7 @@ public class ExcelToSqlConverter {
         String currentDirectory = new File(".").getAbsolutePath();
         System.out.println("Diretório atual: " + currentDirectory);
 
-        Properties properties = loadConfigProperties("config.properties");
+        Properties properties = loadConfigProperties();
 
         if (properties == null) {
             System.out.println("Não foi possível carregar o arquivo de configuração.");
@@ -31,6 +31,7 @@ public class ExcelToSqlConverter {
         File folder = new File(inputDirectory);
         File[] files = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".xlsx"));
 
+        assert files != null;
         for (File file : files) {
             String fileName = FilenameUtils.removeExtension(file.getName());
             String outputFilePath = outputDirectory + File.separator + fileName + ".sql";
@@ -47,23 +48,12 @@ public class ExcelToSqlConverter {
                         Row tableNameRow = rowIterator.next();
                         Row columnNamesRow = rowIterator.next();
 
-                        String tableName = getCellValue(tableNameRow.getCell(0));
                         StringBuilder sqlBuilder = new StringBuilder();
 
                         while (rowIterator.hasNext()) {
                             Row dataRow = rowIterator.next();
-                            boolean isGreenRow = isGreenRow(dataRow);
-
-                            if (isGreenRow) {
-                                String deleteSql = generateDeleteStatement(tableName, columnNamesRow, dataRow);
-                                String insertSql = generateInsertStatement(tableName, columnNamesRow, dataRow);
-
-                                sqlBuilder.append(deleteSql).append("\n").append("/").append("\n");
-                                sqlBuilder.append(insertSql).append("\n").append("/").append("\n");
-
-                            }
+                            processRow(sheet, tableNameRow, columnNamesRow, dataRow, sqlBuilder);
                         }
-
                         fos.write(sqlBuilder.toString().getBytes());
                     }
                 }
@@ -73,9 +63,39 @@ public class ExcelToSqlConverter {
         }
     }
 
-    private static Properties loadConfigProperties(String configFilePath) {
+    private static void processRow(Sheet sheet, Row tableNameRow, Row columnNamesRow, Row dataRow, StringBuilder sqlBuilder) {
+        String tableName = getCellValue(tableNameRow.getCell(0));
+
+        if (isGreenRow(dataRow)) {
+            String deleteSql = generateDeleteStatement(tableName, columnNamesRow, dataRow);
+            String insertSql = generateInsertStatement(tableName, columnNamesRow, dataRow);
+
+            sqlBuilder.append(deleteSql).append("\n").append("/").append("\n");
+            sqlBuilder.append(insertSql).append("\n").append("/").append("\n");
+        } else if (isRedRow(dataRow)) {
+            String deleteSql = generateDeleteStatement(tableName, columnNamesRow, dataRow);
+
+            sqlBuilder.append(deleteSql).append("\n").append("/").append("\n");
+        }
+    }
+
+    private static boolean isRedRow(Row row) {
+        int lastCellNum = row.getLastCellNum();
+
+        for (int i = 0; i < lastCellNum; i++) {
+            Cell cell = row.getCell(i);
+
+            if (cell != null && isRed(cell.getCellStyle())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Properties loadConfigProperties() {
         Properties properties = new Properties();
-        File configFile = new File(configFilePath);
+        File configFile = new File("config.properties");
 
         try (FileInputStream input = new FileInputStream(configFile)) {
             properties.load(input);
@@ -145,6 +165,15 @@ public class ExcelToSqlConverter {
         if (backgroundColor instanceof XSSFColor) {
             byte[] rgb = ((XSSFColor) backgroundColor).getRGB();
             return rgb[0] == 0 && rgb[1] == (byte) 255 && rgb[2] == 0;
+        }
+        return false;
+    }
+
+    private static boolean isRed(CellStyle cellStyle) {
+        Color backgroundColor = cellStyle.getFillForegroundColorColor();
+        if (backgroundColor instanceof XSSFColor) {
+            byte[] rgb = ((XSSFColor) backgroundColor).getRGB();
+            return rgb[0] == (byte) 255 && rgb[1] == 0 && rgb[2] == 0;
         }
         return false;
     }
